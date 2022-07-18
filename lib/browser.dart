@@ -13,23 +13,16 @@
 /// });
 library timezone.browser;
 
-import 'dart:html';
 import 'dart:typed_data';
 
+import 'package:dio/dio.dart';
 import 'package:timezone/timezone.dart';
 
 export 'package:timezone/timezone.dart'
-    show
-        getLocation,
-        setLocalLocation,
-        TZDateTime,
-        Location,
-        TimeZone,
-        timeZoneDatabase;
+    show getLocation, setLocalLocation, TZDateTime, Location, TimeZone, timeZoneDatabase;
 
 /// Path to the Time Zone default database.
-const String tzDataDefaultPath =
-    'packages/timezone/data/$tzDataDefaultFilename';
+const String tzDataDefaultPath = 'packages/timezone/data/$tzDataDefaultFilename';
 
 /// Initialize Time Zone database.
 ///
@@ -43,21 +36,42 @@ const String tzDataDefaultPath =
 ///   final detroitNow = TZDateTime.now(detroit);
 /// });
 /// ```
-Future<void> initializeTimeZone([String path = tzDataDefaultPath]) {
-  return HttpRequest.request(path,
-          method: 'GET',
-          responseType: 'arraybuffer',
-          mimeType: 'application/octet-stream')
+Future<void> initializeTimeZone([String path = tzDataDefaultPath]) async {
+  return await Dio()
+      .get(
+    path,
+    options: Options(
+      responseType: ResponseType.bytes,
+      contentType: 'application/octet-stream',
+    ),
+  )
       .then((req) {
+    final response = req.data;
+    if (response is ByteBuffer) {
+      initializeDatabase(response.asUint8List());
+    } else {
+      throw TimeZoneInitException('Invalid response type: ${response.runtimeType}');
+    }
+  }).catchError((dynamic e) {
+    throw TimeZoneInitException(e.toString());
+  }, test: (e) => e is! TimeZoneInitException);
+
+  /*
+  return HttpRequest.request(
+    path,
+    method: 'GET',
+    responseType: 'arraybuffer',
+    mimeType: 'application/octet-stream',
+  ).then((req) {
     final response = req.response;
 
     if (response is ByteBuffer) {
       initializeDatabase(response.asUint8List());
     } else {
-      throw TimeZoneInitException(
-          'Invalid response type: ${response.runtimeType}');
+      throw TimeZoneInitException('Invalid response type: ${response.runtimeType}');
     }
   }).catchError((dynamic e) {
     throw TimeZoneInitException(e.toString());
   }, test: (e) => e is! TimeZoneInitException);
+  */
 }
